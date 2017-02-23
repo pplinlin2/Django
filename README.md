@@ -6,3 +6,4 @@
 |template|Customizing template, Django Forms|
 
 [basic]: https://github.com/pplinlin2/Django/blob/master/src/django_basic/
+[//]: # (authentication, OAuth, testing, i18n)
