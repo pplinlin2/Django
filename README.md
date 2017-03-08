@@ -1,9 +1,9 @@
 # Django
 |[Django Basic][basic]|Django Advanced|
 |---|---|
-|model|[Django ORM][orm], [Customizing Django Admin][admin]|
-|view|[Django Class-based Views][cbv], [Django REST Framework][drf]|
-|template|Customizing template, Django Forms|
+|model|<ul><li>[Django ORM][orm]</li><li>[Customizing Django Admin][admin]</li></ul>|
+|view|<ul><li>[Django Class-based Views][cbv]</li><li>[Django REST Framework][drf]</li></ul>|
+|template|<ul><li>Customizing template</li><li>Django Forms</li></ul>|
 
 [basic]: https://github.com/pplinlin2/Django/blob/master/src/django_basic/
 [orm]: https://github.com/pplinlin2/Django/blob/master/src/django_orm/
