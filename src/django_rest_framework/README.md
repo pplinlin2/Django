@@ -492,4 +492,105 @@ class CourseViewSet(viewsets.ModelViewSet):
 ```
 這樣就完成了客製化的pagination，關於Pagination的資料可以參考[這裡](http://www.django-rest-framework.org/api-guide/pagination/)
 ## Security and Customization
+這章是探討一些安全性的問題，permission有時候也會被稱為authentication
+* authentication代表對輸入的request進行驗證，確保request裡的token是使用者所擁有的
+* 另一個詞authorization則是確認一個使用者能夠執行什麼動作，例如:CRUD、存取API等…
+
+如果使用者沒有被認證，那麼應該在views前就把他擋下來，回傳403 Forbidden或401 Unauthorized，我們最早時在ed_reviews/settings.py有設定IsAuthenticatedOrReadOnly，這表示要執行create、update或是delete一定要建立一個user，而讀data則無須登入，這裡列出其他的選項：
+* AllowAny: 無須登入可以執行任何動作
+* IsAuthenticated: 須登入才可執行任何動作
+* IsAdminUser: 須登入，且帳號具有is_staff屬性，才可以執行動作
+* DjangoModelPermissions: 須登入，且被指定某些models的存取權限後，才能對其操作
+
+更多的資料可以參考[這裡](http://www.django-rest-framework.org/api-guide/permissions/#djangomodelpermissions)，那麼要如何對某一個views進行單獨的保護呢？讓我們看下去，先建立一個測試用的使用者testuser，在User permissions裡設定Can add course，將permission_classes修改，然後開啟IP:8000/api/v2/courses/，測試在不同使用者下的狀況
+```python
+# courses/views.py
+from rest_framework import permissions
+
+class CourseViewSet(viewsets.ModelViewSet):
+    permission_classes = (permissions.DjangoModelPermissions, )
+    ...
+```
+* logout: 無法List，得到回傳「Authentication credentials were not provided.」
+* testuser: 可以List、可以Retrieve、可以Create，不行Update、不行Delete
+* admin: 可以執行所有動作
+
+要進行客製化的Permission設定可以繼承permissions.BasePermission，例如下面設定IsSuperUser並置於DjangoModelPermissions之前，所以就算有把delete權限給testuser，但過不了我們自訂的權限檢查，testuser還是無法刪除course
+```python
+class IsSuperUser(permissions.BasePermission):
+     def has_permission(self, request, view):
+         if request.user.is_superuser:
+             return True
+         else:
+             if request.method == 'DELETE':
+                 return False
+
+class CourseViewSet(viewsets.ModelViewSet):
+    permission_classes = (IsSuperUser, permissions.DjangoModelPermissions, )
+    ...
+```
+
+上面是討論permission，關注點是一個使用者能否存取API的功能，這裡要介紹的是throttling，也是關於使能否存取API的功能，但重點是使用者能存取API的頻率，例如: super user能一天使用API 500次，而普通使用者一天只能用100次之類的，使用throttling的策略很多，可以看[這裡](http://www.django-rest-framework.org/api-guide/throttling/)瞭解詳細設定，這裡我們設定全域的throttling，未登入的使用者每分鐘能用5次，登入的使用者每分鐘能用10次，當然實際不會設定這麼低的數字，這裡只是要測試給大家看，
+```python
+# ed_reviews/settings.py
+REST_FRAMEWORK = {
+    ...
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '5/minute',
+        'user': '10/minute',
+    },
+)
+```
+設定好之後連線IP:8000/api/v2/courses/，重新整理10次，就得到了回傳
+```javascript
+{
+    "detail": "Request was throttled. Expected available in 37.0 seconds."
+}
+```
+throttling是使用cache來記錄每個使用者的使用情況，我們沒有設定cache的種類，所以預設的是Local-memory caching，更多的資料可以從[這裡](https://docs.djangoproject.com/en/1.9/topics/cache/)得到
+
+再來介紹serializer的驗證功能，讓我們來使用這個validation的功能，目前沒有管rating的範圍，可以設定任何數字，希望可以把它限定在1到5，只對一個field檢查的稱為Field-level validation，須建立validate_<field_name>的method，而Object-level validation則要覆寫validate這個method，這裡演示Field-level validation
+```python
+# courses/serializers.py
+class ReviewSerializer(serializers.ModelSerializer):
+    ...
+    def validate_rating(self, value):
+        if value in range(1, 6):
+            return value
+        raise serializers.ValidationError('Rating must be an integer between 1 and 5')
+```
+建立一個rating=9的review，得到回傳
+```javascript
+{
+    "rating": [
+        "Rating must be an integer between 1 and 5"
+    ]
+}
+```
+更多validation的細節可以看[這裡](http://www.django-rest-framework.org/api-guide/serializers/#validation)
+
+到目前為止，我們都是用ModelSerializer來自動處理serializer的欄位，但現在我們想要新增加一個欄位，可以得到reviews的平均rating，4顆星、4.5顆星還是5顆星，那就須要自訂欄位了！這裡要使用的是SerializerMethodField，代表一個函式計算後回傳的值，這個函式的名字須要是get_<field_name>
+```python
+# courses/serializers.py
+from django.db.models import Avg
+
+class CourseSerializer(serializers.ModelSerializer):
+    ...
+    average_rating = serializers.SerializerMethodField()
+    def get_average_rating(self, obj):
+        average = obj.reviews.aggregate(Avg('rating')).get('rating__avg')
+        if average is None:
+            return 0
+        return round(average*2)/2
+ 
+    class Meta:
+        fields = ('id', 'title', 'url', 'reviews', 'average_rating')
+```
+要注意的是每一次取出course時，average_rating會拿所有的review計算一次平均，這在現在資料少的時候看起來不會很嚴重，但是在資料量大的時候就會是一個大議題了！所以每一次新增reviews時計算好average存進database或許是個比較好的方法，更多有關serializer method field的資訊可以看[這裡](http://www.django-rest-framework.org/api-guide/fields/#serializermethodfield)
+
 ## Epilogue
+在經過一整章的介紹之後，相信大家對於DRF有了更深入的瞭解，DRF對於網站後台的建立是一大助力，希望大家加以妥善的運用了！
