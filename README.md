@@ -7,6 +7,7 @@
 |view|<ul><li>[Django Class-based Views](src/django_cbv)</li><li>[Django REST Framework](src/django_rest_framework)</li></ul>|
 |template|<ul><li>Customizing template</li><li>Django Forms</li></ul>|
 |auth|<ul><li>[Django Authentication](src/django_auth)</li><li>[Django OAuth](src/django_oauth)</li></ul>|
+|modern|<ul><li>[Django Channels](src/django_channels)</li></ul>|
 
 [//]: # (testing, i18n)
 
