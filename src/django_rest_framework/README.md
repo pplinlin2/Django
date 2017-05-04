@@ -70,7 +70,7 @@ class Review(models.Model):
 要使用DRF Serializer，首先，要建立一個檔案serializers.py，可以預期的裡面會有好幾個serializer，正如models.py裡面會有一些model，在meta裡面我們指定了serializer所對應的model，並且用field指定須要被serialize的欄位，由於我們不太想讓所有人可以輕易得到別人的email，但是又不能把這個欄位去除掉，因為在建立Review時還是須要填寫這個欄位，所以把email指定為write only
 ```python
 # courses/serializers.py
-from rest_framework import serailizer
+from rest_framework import serializers
 from . import models
 
 class ReviewSerializer(serializers.ModelSerializer):
